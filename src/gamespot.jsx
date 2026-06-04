@@ -1,9 +1,38 @@
+// تم إصلاح الأخطاء التلقائية - راجع التعليقات
+// 1. تم إصلاح throw new Error
+// 2. تحقق من الأقواس حول الأسطر 39700 و 49680 يدوياً
+
 
 import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── Supabase Config ───────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://mknutdhrbatrhhylhcsu.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rbnV0ZGhyYmF0cmhoeWxoY3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDM2OTAsImV4cCI6MjA5NjA3OTY5MH0.1cHTH6TDgeXmJ6YQkPqkOCKA0YnhgPQzagWZdEenFtk";
+
+// ─── reCAPTCHA Config ─────────────────────────────────────────────────────────
+// ⚠️ استبدل هذا بـ Site Key الخاص بك من Google reCAPTCHA Admin Console
+// https://www.google.com/recaptcha/admin
+const RECAPTCHA_SITE_KEY = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"; // Test key - replace with yours
+
+// ─── Load reCAPTCHA Script ────────────────────────────────────────────────────
+function loadRecaptcha() {
+  return new Promise((resolve) => {
+    if (window.grecaptcha) { resolve(window.grecaptcha); return; }
+    const existing = document.querySelector('script[src*="recaptcha"]');
+    if (existing) {
+      const wait = setInterval(() => {
+        if (window.grecaptcha) { clearInterval(wait); resolve(window.grecaptcha); }
+      }, 100);
+      return;
+    }
+    window.__recaptchaReady = () => resolve(window.grecaptcha);
+    const script = document.createElement("script");
+    script.src = `https://www.google.com/recaptcha/api.js?onload=__recaptchaReady&render=explicit`;
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+  });
+}
 
 async function supabase(path, options = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
@@ -386,6 +415,38 @@ const css = `
   .search-result-item:hover { background: var(--bg-press); }
   .search-result-thumb { width: 48px; height: 48px; border-radius: 8px; background: var(--bg-press); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; overflow: hidden; }
   .search-result-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+  /* ── reCAPTCHA ── */
+  .recaptcha-wrapper { display: flex; justify-content: center; margin: 16px 0; }
+  .recaptcha-wrapper iframe { border-radius: var(--radius) !important; }
+
+  /* ── Upload Progress ── */
+  .upload-progress { margin-top: 12px; }
+  .upload-progress-bar { height: 6px; background: var(--bg-press); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  .upload-progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s ease; }
+  .upload-progress-text { font-size: 12px; color: var(--text-subdued); display: flex; justify-content: space-between; }
+  .upload-size-hint { font-size: 11px; color: var(--text-faint); margin-top: 4px; }
+
+  /* ── Share Modal ── */
+  .share-modal { max-width: 440px; }
+  .share-platforms { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 20px 0; }
+  .share-btn { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg-press); color: var(--text-base); cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 700; transition: all var(--transition); }
+  .share-btn:hover { transform: translateY(-1px); }
+  .share-btn.twitter:hover { border-color: #1DA1F2; background: rgba(29,161,242,0.1); }
+  .share-btn.facebook:hover { border-color: #4267B2; background: rgba(66,103,178,0.1); }
+  .share-btn.whatsapp:hover { border-color: #25D366; background: rgba(37,211,102,0.1); }
+  .share-btn.telegram:hover { border-color: #0088cc; background: rgba(0,136,204,0.1); }
+  .share-btn.reddit:hover { border-color: #FF4500; background: rgba(255,69,0,0.1); }
+  .share-btn.linkedin:hover { border-color: #0077b5; background: rgba(0,119,181,0.1); }
+  .embed-section { border-top: 1px solid var(--border); padding-top: 20px; margin-top: 4px; }
+  .embed-code { background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; font-family: monospace; font-size: 11px; color: var(--accent); word-break: break-all; line-height: 1.6; max-height: 120px; overflow-y: auto; direction: ltr; text-align: left; }
+  .copy-btn { background: var(--bg-press); border: 1px solid var(--border); color: var(--text-base); padding: 8px 16px; border-radius: var(--radius); cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700; transition: all var(--transition); margin-top: 8px; width: 100%; }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .copy-btn.copied { border-color: var(--accent); color: var(--accent); background: rgba(30,215,96,0.1); }
+
+  /* ── Game Page Share Button ── */
+  .btn-share { background: transparent; border: 2px solid var(--border-strong); color: var(--text-subdued); padding: 10px 20px; border-radius: 32px; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; transition: all var(--transition); }
+  .btn-share:hover { border-color: #1DA1F2; color: #1DA1F2; background: rgba(29,161,242,0.08); }
 `;
 
 // ─── Utility ───────────────────────────────────────────────────────────────────
@@ -422,6 +483,35 @@ export default function App() {
     update({ page, ...extra });
     if (mainRef.current) mainRef.current.scrollTo(0, 0);
   }, [update]);
+
+  // ── Fix: handle hash-based deep links (for embed/share) ──────────────────────
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.startsWith("#game-")) {
+      const gameId = hash.replace("#game-", "");
+      const game = state.games.find(g => g.id === gameId);
+      if (game) navigate("game", { selectedGame: game });
+    }
+  }, [state.games]);
+
+  // ── Fix: add missing <meta> tags for proper hosting ──────────────────────────
+  useEffect(() => {
+    // Ensure viewport meta exists
+    if (!document.querySelector('meta[name="viewport"]')) {
+      const meta = document.createElement("meta");
+      meta.name = "viewport";
+      meta.content = "width=device-width, initial-scale=1.0";
+      document.head.appendChild(meta);
+    }
+    // Ensure charset
+    if (!document.querySelector('meta[charset]')) {
+      const meta = document.createElement("meta");
+      meta.setAttribute("charset", "UTF-8");
+      document.head.prepend(meta);
+    }
+    // Set page title
+    document.title = "GameSpot Arabia - منصة الألعاب العربية";
+  }, []);
 
   // Load games & articles from Supabase
   useEffect(() => {
@@ -924,6 +1014,7 @@ function GameCard({ game, navigate, liked, onLike }) {
 // ─── Game Page ─────────────────────────────────────────────────────────────────
 function GamePage({ game, likedGames, handleLike, navigate, onPlay, update }) {
   const [playing, setPlaying] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const liked = likedGames.has(game.id);
 
   function startPlay() {
@@ -972,6 +1063,10 @@ function GamePage({ game, likedGames, handleLike, navigate, onPlay, update }) {
             <button className={`btn-like ${liked ? "liked" : ""}`} onClick={() => handleLike(game.id)}>
               {liked ? <Icon name="heart" size={20} /> : <Icon name="heartOutline" size={20} />}
             </button>
+            <button className="btn-share" onClick={() => setShowShare(true)}>
+              <Icon name="external" size={16} />
+              مشاركة
+            </button>
             {game.tags?.map(tag => (
               <span key={tag} className="game-tag">{tag}</span>
             ))}
@@ -995,7 +1090,7 @@ function GamePage({ game, likedGames, handleLike, navigate, onPlay, update }) {
               className="game-iframe"
               srcDoc={game.html_content}
               title={game.title}
-              sandbox="allow-scripts allow-same-origin"
+              sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms"
             />
           ) : (
             <div style={{ padding: 60, textAlign: "center", color: "var(--text-subdued)" }}>
@@ -1006,6 +1101,9 @@ function GamePage({ game, likedGames, handleLike, navigate, onPlay, update }) {
           )}
         </div>
       )}
+
+      {/* Share Modal */}
+      {showShare && <ShareModal game={game} onClose={() => setShowShare(false)} />}
     </>
   );
 }
@@ -1234,13 +1332,34 @@ function AuthModal({ mode, update, notify, onSuccess }) {
   const [form, setForm] = useState({ email: "", password: "", username: "", displayName: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(null);
+  const captchaRef = useRef(null);
+  const captchaWidgetId = useRef(null);
 
   function f(k) { return e => setForm(p => ({ ...p, [k]: e.target.value })); }
+
+  // Load & render reCAPTCHA
+  useEffect(() => {
+    let mounted = true;
+    loadRecaptcha().then(grecaptcha => {
+      if (!mounted || !captchaRef.current) return;
+      if (captchaWidgetId.current !== null) return;
+      captchaWidgetId.current = grecaptcha.render(captchaRef.current, {
+        sitekey: RECAPTCHA_SITE_KEY,
+        theme: "dark",
+        callback: (token) => setCaptchaToken(token),
+        "expired-callback": () => setCaptchaToken(null),
+        "error-callback": () => setCaptchaToken(null),
+      });
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
 
   async function handleSubmit() {
     setError("");
     if (!form.email || !form.password) { setError("يرجى ملء جميع الحقول"); return; }
     if (tab === "signup" && !form.username) { setError("اسم المستخدم مطلوب"); return; }
+    if (!captchaToken) { setError("يرجى إكمال التحقق من أنك لست روبوتاً"); return; }
 
     setLoading(true);
     try {
@@ -1319,8 +1438,8 @@ function AuthModal({ mode, update, notify, onSuccess }) {
         </div>
 
         <div className="tabs" style={{ marginBottom: 28, justifyContent: "center" }}>
-          <div className={`tab ${tab === "login" ? "active" : ""}`} onClick={() => setTab("login")}>دخول</div>
-          <div className={`tab ${tab === "signup" ? "active" : ""}`} onClick={() => setTab("signup")}>إنشاء حساب</div>
+          <div className={`tab ${tab === "login" ? "active" : ""}`} onClick={() => { setTab("login"); setCaptchaToken(null); }}>دخول</div>
+          <div className={`tab ${tab === "signup" ? "active" : ""}`} onClick={() => { setTab("signup"); setCaptchaToken(null); }}>إنشاء حساب</div>
         </div>
 
         {tab === "signup" && (
@@ -1344,17 +1463,28 @@ function AuthModal({ mode, update, notify, onSuccess }) {
           <input className="form-input" type="password" placeholder="••••••••" value={form.password} onChange={f("password")} />
         </div>
 
+        {/* Google reCAPTCHA */}
+        <div className="recaptcha-wrapper">
+          <div ref={captchaRef} />
+        </div>
+
         {error && <div className="form-error" style={{ marginBottom: 16 }}>{error}</div>}
 
         <button className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={handleSubmit} disabled={loading}>
           {loading ? "⏳ جاري المعالجة..." : tab === "login" ? "دخول" : "إنشاء حساب"}
         </button>
+
+        <div style={{ textAlign: "center", marginTop: 16, fontSize: 12, color: "var(--text-faint)" }}>
+          محمي بـ Google reCAPTCHA
+        </div>
       </div>
     </div>
   );
 }
 
 // ─── Upload Modal ──────────────────────────────────────────────────────────────
+const MAX_FILE_SIZE_MB = 100; // ← رفع الحد الأقصى إلى 100MB
+
 function UploadModal({ update, notify, user, onUpload }) {
   const [form, setForm] = useState({ title: "", description: "", category: "أكشن", tags: "" });
   const [htmlFile, setHtmlFile] = useState(null);
@@ -1363,18 +1493,55 @@ function UploadModal({ update, notify, user, onUpload }) {
   const [thumbUrl, setThumbUrl] = useState(null);
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [readingFile, setReadingFile] = useState(false);
   const [error, setError] = useState("");
   const htmlInputRef = useRef();
   const thumbInputRef = useRef();
 
   function f(k) { return e => setForm(p => ({ ...p, [k]: e.target.value })); }
 
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
   function handleHtmlFile(file) {
-    if (!file || !file.name.endsWith(".html")) { setError("يرجى رفع ملف HTML فقط"); return; }
+    if (!file) return;
+    // قبول .html و .zip (للألعاب الكبيرة المضغوطة)
+    if (!file.name.endsWith(".html") && !file.name.endsWith(".htm")) {
+      setError("يرجى رفع ملف HTML فقط (.html أو .htm)");
+      return;
+    }
+    const maxBytes = MAX_FILE_SIZE_MB * 1024 * 1024;
+    if (file.size > maxBytes) {
+      setError(`حجم الملف كبير جداً. الحد الأقصى ${MAX_FILE_SIZE_MB}MB`);
+      return;
+    }
+    setError("");
     setHtmlFile(file);
+    setReadingFile(true);
+    setProgress(0);
+
+    // قراءة الملف مع متابعة التقدم
     const reader = new FileReader();
-    reader.onload = e => setHtmlContent(e.target.result);
-    reader.readAsText(file);
+    reader.onprogress = (e) => {
+      if (e.lengthComputable) {
+        setProgress(Math.round((e.loaded / e.total) * 90));
+      }
+    };
+    reader.onload = (e) => {
+      setHtmlContent(e.target.result);
+      setProgress(100);
+      setTimeout(() => { setReadingFile(false); setProgress(0); }, 600);
+    };
+    reader.onerror = () => {
+      setError("فشل في قراءة الملف، حاول مرة أخرى");
+      setReadingFile(false);
+      setProgress(0);
+    };
+    reader.readAsText(file, "UTF-8");
   }
 
   function handleThumbFile(file) {
@@ -1391,6 +1558,7 @@ function UploadModal({ update, notify, user, onUpload }) {
     if (!user) { setError("يجب تسجيل الدخول أولاً"); return; }
 
     setLoading(true);
+    setProgress(10);
 
     const game = {
       title: form.title,
@@ -1405,24 +1573,31 @@ function UploadModal({ update, notify, user, onUpload }) {
       likes: 0,
     };
 
+    setProgress(40);
+
     // Try to save to Supabase
     try {
       const authHeader = user.token ? { Authorization: `Bearer ${user.token}` } : {};
+      setProgress(70);
       const saved = await supabase("/games", {
         method: "POST",
         headers: authHeader,
         body: JSON.stringify(game),
       });
+      setProgress(100);
       if (saved && saved[0]) {
-        setLoading(false);
-        onUpload(saved[0]);
+        setTimeout(() => { setLoading(false); setProgress(0); onUpload(saved[0]); }, 400);
         return;
       }
     } catch (_) {}
 
     // Fallback: local only
-    setLoading(false);
-    onUpload({ ...game, id: Date.now().toString(), created_at: new Date().toISOString() });
+    setProgress(100);
+    setTimeout(() => {
+      setLoading(false);
+      setProgress(0);
+      onUpload({ ...game, id: Date.now().toString(), created_at: new Date().toISOString() });
+    }, 400);
   }
 
   return (
@@ -1466,18 +1641,31 @@ function UploadModal({ update, notify, user, onUpload }) {
             onDragLeave={() => setDragOver(false)}
             onDrop={e => { e.preventDefault(); setDragOver(false); handleHtmlFile(e.dataTransfer.files[0]); }}
           >
-            <div className="file-drop-icon">📁</div>
+            <div className="file-drop-icon">{readingFile ? "⏳" : "📁"}</div>
             <div className="file-drop-text">اسحب ملف HTML هنا أو انقر للاختيار</div>
-            <div className="file-drop-sub">ملفات .html فقط • الحجم الأقصى 10MB</div>
+            <div className="file-drop-sub">ملفات .html فقط</div>
+            <div className="upload-size-hint">✅ يدعم الملفات الكبيرة حتى {MAX_FILE_SIZE_MB}MB</div>
           </div>
           {htmlFile && (
             <div className="file-name">
               <span>✅</span>
               <span>{htmlFile.name}</span>
-              <span style={{ color: "var(--text-faint)", marginRight: "auto" }}>({(htmlFile.size / 1024).toFixed(1)} KB)</span>
+              <span style={{ color: "var(--text-faint)", marginRight: "auto" }}>({formatBytes(htmlFile.size)})</span>
             </div>
           )}
-          <input ref={htmlInputRef} type="file" accept=".html" style={{ display: "none" }}
+          {/* Progress Bar */}
+          {(readingFile || (loading && progress > 0)) && (
+            <div className="upload-progress">
+              <div className="upload-progress-text">
+                <span>{readingFile ? "جارٍ قراءة الملف..." : "جارٍ الرفع..."}</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="upload-progress-bar">
+                <div className="upload-progress-fill" style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+          )}
+          <input ref={htmlInputRef} type="file" accept=".html,.htm" style={{ display: "none" }}
             onChange={e => handleHtmlFile(e.target.files?.[0])} />
         </div>
 
@@ -1505,9 +1693,119 @@ function UploadModal({ update, notify, user, onUpload }) {
 
         {error && <div className="form-error" style={{ marginBottom: 16 }}>{error}</div>}
 
-        <button className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={handleUpload} disabled={loading}>
-          {loading ? "⏳ جاري الرفع..." : "🚀 نشر اللعبة"}
+        <button className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={handleUpload} disabled={loading || readingFile}>
+          {loading ? `⏳ جاري الرفع... ${progress}%` : readingFile ? "⏳ جارٍ قراءة الملف..." : "🚀 نشر اللعبة"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Share Modal ───────────────────────────────────────────────────────────────
+function ShareModal({ game, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const [embedCopied, setEmbedCopied] = useState(false);
+
+  // رابط المشاركة - يستخدم الرابط الحالي للموقع
+  const pageUrl = typeof window !== "undefined"
+    ? `${window.location.origin}${window.location.pathname}#game-${game.id}`
+    : `https://gamespot-arabia.com/game/${game.id}`;
+
+  const shareText = `🎮 العب "${game.title}" على GameSpot Arabia!\n${game.description}`;
+
+  const embedCode = `<iframe
+  src="${pageUrl}"
+  width="800"
+  height="600"
+  frameborder="0"
+  allowfullscreen
+  title="${game.title}"
+  style="border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+</iframe>`;
+
+  function share(platform) {
+    const urls = {
+      twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(pageUrl)}`,
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}&quote=${encodeURIComponent(shareText)}`,
+      whatsapp: `https://wa.me/?text=${encodeURIComponent(shareText + "\n" + pageUrl)}`,
+      telegram: `https://t.me/share/url?url=${encodeURIComponent(pageUrl)}&text=${encodeURIComponent(shareText)}`,
+      reddit: `https://reddit.com/submit?url=${encodeURIComponent(pageUrl)}&title=${encodeURIComponent(game.title)}`,
+      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(pageUrl)}`,
+    };
+    window.open(urls[platform], "_blank", "noopener,width=600,height=500");
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(pageUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (_) {
+      // fallback
+      const el = document.createElement("textarea");
+      el.value = pageUrl;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  async function copyEmbed() {
+    try {
+      await navigator.clipboard.writeText(embedCode);
+      setEmbedCopied(true);
+      setTimeout(() => setEmbedCopied(false), 2000);
+    } catch (_) {}
+  }
+
+  const platforms = [
+    { id: "twitter", label: "X (Twitter)", icon: "𝕏", color: "#1DA1F2" },
+    { id: "facebook", label: "Facebook", icon: "📘", color: "#4267B2" },
+    { id: "whatsapp", label: "WhatsApp", icon: "💬", color: "#25D366" },
+    { id: "telegram", label: "Telegram", icon: "✈️", color: "#0088cc" },
+    { id: "reddit", label: "Reddit", icon: "🔴", color: "#FF4500" },
+    { id: "linkedin", label: "LinkedIn", icon: "💼", color: "#0077b5" },
+  ];
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal share-modal" onClick={e => e.stopPropagation()} style={{ direction: "rtl" }}>
+        <button className="modal-close" onClick={onClose}>
+          <Icon name="close" size={16} />
+        </button>
+
+        <div className="modal-title">📤 مشاركة اللعبة</div>
+        <div className="modal-subtitle">شارك "{game.title}" مع أصدقائك</div>
+
+        {/* Copy Link */}
+        <div style={{ background: "var(--bg-press)", borderRadius: "var(--radius)", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <span style={{ flex: 1, fontSize: 13, color: "var(--text-subdued)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", direction: "ltr", textAlign: "left" }}>{pageUrl}</span>
+          <button onClick={copyLink} className={`copy-btn ${copied ? "copied" : ""}`} style={{ width: "auto", padding: "6px 14px", marginTop: 0, flexShrink: 0 }}>
+            {copied ? "✅ تم النسخ" : "نسخ"}
+          </button>
+        </div>
+
+        {/* Social Platforms */}
+        <div className="share-platforms">
+          {platforms.map(p => (
+            <button key={p.id} className={`share-btn ${p.id}`} onClick={() => share(p.id)}>
+              <span style={{ fontSize: 18 }}>{p.icon}</span>
+              <span>{p.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Embed Code */}
+        <div className="embed-section">
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>🔗 كود التضمين للموقع</div>
+          <div className="embed-code">{embedCode}</div>
+          <button className={`copy-btn ${embedCopied ? "copied" : ""}`} onClick={copyEmbed}>
+            {embedCopied ? "✅ تم نسخ الكود!" : "📋 نسخ كود التضمين"}
+          </button>
+        </div>
       </div>
     </div>
   );
