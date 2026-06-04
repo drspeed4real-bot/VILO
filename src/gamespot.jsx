@@ -2,9 +2,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── Supabase Config ───────────────────────────────────────────────────────────
-// Replace with your actual Supabase URL and anon key
-const SUPABASE_URL = "https://YOUR_PROJECT.supabase.co";
-const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
+const SUPABASE_URL = "https://mknutdhrbatrhhylhcsu.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rbnV0ZGhyYmF0cmhoeWxoY3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDM2OTAsImV4cCI6MjA5NjA3OTY5MH0.1cHTH6TDgeXmJ6YQkPqkOCKA0YnhgPQzagWZdEenFtk";
 
 async function supabase(path, options = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
@@ -424,8 +423,32 @@ export default function App() {
     if (mainRef.current) mainRef.current.scrollTo(0, 0);
   }, [update]);
 
-  // Search
+  // Load games & articles from Supabase
   useEffect(() => {
+    async function loadData() {
+      try {
+        const games = await supabase("/games?select=*&order=created_at.desc");
+        if (games && games.length > 0) {
+          update({
+            games,
+            stats: {
+              totalGames: games.length,
+              totalPlays: games.reduce((s, g) => s + (g.plays || 0), 0),
+              totalUsers: new Set(games.map(g => g.author_id)).size,
+              totalArticles: state.articles.length,
+            }
+          });
+        }
+      } catch (_) {}
+      try {
+        const articles = await supabase("/articles?select=*&order=created_at.desc");
+        if (articles && articles.length > 0) {
+          update({ articles, stats: { totalGames: state.stats.totalGames, totalPlays: state.stats.totalPlays, totalUsers: state.stats.totalUsers, totalArticles: articles.length } });
+        }
+      } catch (_) {}
+    }
+    loadData();
+  }, []);
     if (!state.searchQuery.trim()) {
       update({ searchResults: { games: [], articles: [] } });
       return;
@@ -644,8 +667,8 @@ export default function App() {
       {state.authModal && (
         <AuthModal
           mode={state.authModal} update={update} notify={notify}
-          onSuccess={(user) => {
-            update({ user, authModal: null });
+          onSuccess={(user, token) => {
+            update({ user, token, authModal: null });
             notify(`مرحباً ${user.displayName || user.username}! 🎮`);
           }}
         />
@@ -654,8 +677,9 @@ export default function App() {
         <UploadModal
           update={update} notify={notify} user={state.user}
           onUpload={(game) => {
+            const newGame = game.id ? game : { ...game, id: Date.now().toString(), plays: 0, likes: 0, created_at: new Date().toISOString() };
             update({
-              games: [{ ...game, id: Date.now().toString(), plays: 0, likes: 0, created_at: new Date().toISOString() }, ...state.games],
+              games: [newGame, ...state.games],
               uploadModal: false,
               stats: { ...state.stats, totalGames: state.stats.totalGames + 1 }
             });
@@ -667,8 +691,9 @@ export default function App() {
         <ArticleEditorModal
           update={update} notify={notify} user={state.user}
           onPublish={(article) => {
+            const newArticle = article.id ? article : { ...article, id: "a" + Date.now(), created_at: new Date().toISOString(), likes: 0 };
             update({
-              articles: [{ ...article, id: "a" + Date.now(), created_at: new Date().toISOString(), likes: 0 }, ...state.articles],
+              articles: [newArticle, ...state.articles],
               articleModal: false,
             });
             notify("✍️ تم نشر مقالك بنجاح!");
@@ -1218,21 +1243,66 @@ function AuthModal({ mode, update, notify, onSuccess }) {
     if (tab === "signup" && !form.username) { setError("اسم المستخدم مطلوب"); return; }
 
     setLoading(true);
-
-    // Mock auth (replace with real Supabase auth)
-    await new Promise(r => setTimeout(r, 800));
-
-    const mockUser = {
-      id: "u" + Date.now(),
-      email: form.email,
-      username: form.username || form.email.split("@")[0],
-      displayName: form.displayName || form.username || form.email.split("@")[0],
-      avatar: null,
-      bio: "",
-    };
-
-    setLoading(false);
-    onSuccess(mockUser);
+    try {
+      if (tab === "signup") {
+        const data = await supabaseAuth("/signup", {
+          email: form.email,
+          password: form.password,
+          data: { username: form.username, display_name: form.displayName || form.username },
+        });
+        if (data.error) { setError(data.error.message || "خطأ في إنشاء الحساب"); setLoading(false); return; }
+        // Try to insert into profiles table if exists
+        try {
+          await supabase("/profiles", {
+            method: "POST",
+            body: JSON.stringify({
+              id: data.user?.id,
+              username: form.username,
+              display_name: form.displayName || form.username,
+              email: form.email,
+            }),
+          });
+        } catch (_) {}
+        const user = {
+          id: data.user?.id,
+          email: form.email,
+          username: form.username,
+          displayName: form.displayName || form.username,
+          avatar: null,
+          bio: "",
+          token: data.access_token,
+        };
+        setLoading(false);
+        onSuccess(user, data.access_token);
+      } else {
+        const data = await supabaseAuth("/token?grant_type=password", {
+          email: form.email,
+          password: form.password,
+        });
+        if (data.error) { setError(data.error.message || "بريد إلكتروني أو كلمة مرور خاطئة"); setLoading(false); return; }
+        const meta = data.user?.user_metadata || {};
+        // Fetch profile
+        let profile = null;
+        try {
+          const profiles = await supabase(`/profiles?id=eq.${data.user?.id}&select=*`);
+          profile = profiles?.[0];
+        } catch (_) {}
+        const user = {
+          id: data.user?.id,
+          email: form.email,
+          username: profile?.username || meta.username || form.email.split("@")[0],
+          displayName: profile?.display_name || meta.display_name || meta.username || form.email.split("@")[0],
+          avatar: profile?.avatar_url || null,
+          bio: profile?.bio || "",
+          token: data.access_token,
+        };
+        setLoading(false);
+        onSuccess(user, data.access_token);
+      }
+    } catch (e) {
+      setError("حدث خطأ، تحقق من الاتصال");
+      setLoading(false);
+    }
   }
 
   return (
@@ -1321,7 +1391,6 @@ function UploadModal({ update, notify, user, onUpload }) {
     if (!user) { setError("يجب تسجيل الدخول أولاً"); return; }
 
     setLoading(true);
-    await new Promise(r => setTimeout(r, 600));
 
     const game = {
       title: form.title,
@@ -1332,10 +1401,28 @@ function UploadModal({ update, notify, user, onUpload }) {
       thumbnail: thumbUrl,
       author: user.displayName || user.username,
       author_id: user.id,
+      plays: 0,
+      likes: 0,
     };
 
+    // Try to save to Supabase
+    try {
+      const authHeader = user.token ? { Authorization: `Bearer ${user.token}` } : {};
+      const saved = await supabase("/games", {
+        method: "POST",
+        headers: authHeader,
+        body: JSON.stringify(game),
+      });
+      if (saved && saved[0]) {
+        setLoading(false);
+        onUpload(saved[0]);
+        return;
+      }
+    } catch (_) {}
+
+    // Fallback: local only
     setLoading(false);
-    onUpload(game);
+    onUpload({ ...game, id: Date.now().toString(), created_at: new Date().toISOString() });
   }
 
   return (
@@ -1445,16 +1532,34 @@ function ArticleEditorModal({ update, notify, user, onPublish }) {
     if (!user) { setError("يجب تسجيل الدخول أولاً"); return; }
 
     setLoading(true);
-    await new Promise(r => setTimeout(r, 500));
-    setLoading(false);
 
-    onPublish({
+    const article = {
       title: form.title,
       content,
       read_time: parseInt(form.readTime),
       author: user.displayName || user.username,
       author_id: user.id,
-    });
+      likes: 0,
+    };
+
+    // Try to save to Supabase
+    try {
+      const authHeader = user.token ? { Authorization: `Bearer ${user.token}` } : {};
+      const saved = await supabase("/articles", {
+        method: "POST",
+        headers: authHeader,
+        body: JSON.stringify(article),
+      });
+      if (saved && saved[0]) {
+        setLoading(false);
+        onPublish(saved[0]);
+        return;
+      }
+    } catch (_) {}
+
+    // Fallback: local only
+    setLoading(false);
+    onPublish({ ...article, id: "a" + Date.now(), created_at: new Date().toISOString() });
   }
 
   return (
