@@ -47,7 +47,8 @@ async function supabase(path, options = {}) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || res.statusText);
+    console.error("Supabase Error:", res.status, err);
+    throw new Error(err.message || res.statusText || "Supabase request failed");
   }
   return res.json().catch(() => null);
 }
